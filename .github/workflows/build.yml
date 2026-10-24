@@ -20,6 +20,8 @@ env:
   NIKKI_FEED: https://github.com/nikkinikki-org/OpenWrt-nikki
   DEVICE: h3c_magic-nx30-pro-112m
   TZ: Asia/Shanghai
+  # 改这个值可以强制让编译缓存失效（源码大版本升级、gcc 变动时用）
+  CACHE_VER: v1
 
 jobs:
   build:
@@ -67,6 +69,32 @@ jobs:
           cd openwrt
           echo "source commit: $(git log -1 --pretty='%H %s')"
           echo "kernel: $(sed -n 's/^KERNEL_PATCHVER:=//p' target/linux/mediatek/Makefile)"
+
+      # 关键提速点：工具链(交叉编译器) + host 工具 是单次构建里最贵的一段
+      # (约 45~60 分钟)。它们只跟源码分支/gcc 版本有关，跟我们的 DTS/软件包无关，
+      # 缓存下来后续构建直接复用，不用每次从头编。
+      # dl/ 是源码包缓存，命中后能省掉几分钟下载，也避免上游抽风导致失败。
+      - name: Restore build cache (dl + toolchain + host tools)
+        id: buildcache
+        uses: actions/cache@v4
+        with:
+          path: |
+            openwrt/dl
+            openwrt/build_dir/host
+            openwrt/build_dir/toolchain-*
+            openwrt/staging_dir/host
+            openwrt/staging_dir/toolchain-*
+          key: owrt-${{ env.CACHE_VER }}-${{ env.REPO_BRANCH }}-${{ hashFiles('configs/**', 'device/**', 'dts/**') }}
+          restore-keys: |
+            owrt-${{ env.CACHE_VER }}-${{ env.REPO_BRANCH }}-
+
+      - name: Cache status
+        run: |
+          if [ "${{ steps.buildcache.outputs.cache-hit }}" = "true" ]; then
+            echo "✅ 命中缓存：跳过工具链/host 工具编译"
+          else
+            echo "❌ 未命中（首次或配置有变更），本次会全量编工具链"
+          fi
 
       - name: Add nikki feed and Glass theme
         run: |
@@ -118,7 +146,11 @@ jobs:
         run: |
           set -o pipefail
           cd openwrt
+          # 限制 ccache 体积，避免把它和工具链缓存一起撑爆 GitHub 的 10GB 缓存额度
+          ccache -M 2G >/dev/null 2>&1 || true
+          ccache -z >/dev/null 2>&1 || true
           make -j"$(nproc)" 2>&1 | tee build.log
+          ccache -s || true
 
       - name: Upload build log (on failure)
         if: failure()

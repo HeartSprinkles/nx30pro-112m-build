@@ -154,3 +154,49 @@ mtdids=spi-nand0=spi-nand0
 - 大分区布局**不能**用官方 OpenWrt 的 `sysupgrade` 从原厂固件直升，只能走 U-Boot Web UI。
 - 如果你把 `IMAGE_SIZE` 改小于实际 rootfs，编译最后一步会报 `Image too big`，按提示加大即可。
 - 本仓库不包含 U-Boot 的编译（用上游 bl-mt798x-dhcpd 的 Actions 即可），也不对你的设备安全负责——刷机前请备份。
+
+---
+
+## 八、编译加速（重要）
+
+### 为什么不能直接用现成的 .ipk
+
+很多人想「软件包直接从源里下编好的 ipk」。这对 **kmod-\\* 完全行不通**：
+
+- kmod 的 ABI 绑死内核版本 + 内核补丁集。本源码是 MTK 魔改内核（HNAT / 私有补丁），
+  官方 ImmortalWrt 仓库编出来的 kmod 装上去必然 `kernel version mismatch`。
+- 纯用户态包（luci 主题、yq 之类）理论上可以复用，但它们依赖的 `libc`/`libustream` 等
+  ABI 也得对齐，混用不同快照的包很容易出现符号缺失，收益远小于风险。
+
+所以本工程走的是**「缓存编译产物」**而不是「下载别人的产物」——效果一样，且绝对安全：
+工具链一旦编好就缓存起来，下次直接用，不再重复编译。
+
+### 已生效的三层缓存
+
+| 缓存 | 内容 | 命中后省下 |
+| --- | --- | --- |
+| `Restore build cache` | `dl/` 源码包、`build_dir/toolchain-*`、`staging_dir/toolchain-*`、`build_dir/host`、`staging_dir/host` | **约 45~60 分钟**（交叉编译器 + host 工具是整个构建最贵的一段） |
+| `Restore ccache` | `~/.ccache` | 包编译阶段的重复目标文件，约 20~30% |
+| `dl/` | 已在上面那层里 | 几分钟下载，同时避免上游抽风 |
+
+缓存 key 里带了 `hashFiles('configs/**', 'device/**', 'dts/**')`，所以：
+
+- **改配置/DTS/设备定义 → key 变 → 冷启动**（会重编工具链，属预期）
+- **只改工作流其他部分 → key 不变 → 热启动**（几分钟出固件）
+
+想强制清缓存，改 `build.yml` 里的 `CACHE_VER: v1` → `v2` 即可。
+
+> GitHub 单仓库缓存上限 10GB，所以 `build_dir` 的完整内容（20GB+）没法整包缓存，
+> 只挑工具链那部分。ccache 也限制在 2GB，避免把工具链缓存挤掉。
+
+### 还能更快：自己出 SDK
+
+如果以后要频繁改包，最优解是「编一次 → 导出 SDK → 之后只用 SDK 编增量」：
+
+```bash
+cd openwrt && make menuconfig   # 勾上 Build the OpenWrt SDK
+make -j$(nproc)
+# 产物：bin/targets/mediatek/filogic/immortalwrt-sdk-*.tar.zst
+```
+
+用 SDK 编增量固件通常 10~20 分钟，因为工具链和已编好的包都是现成的。代价是要先有一份 SDK。
