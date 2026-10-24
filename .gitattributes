@@ -1,0 +1,13 @@
+# 统一换行符为 LF —— 否则 Windows 下提交的 .sh / uci-defaults 在 runner 上会
+# 报 "bash: $'\r': command not found"，直接把编译流程打断。
+* text=auto eol=lf
+
+*.sh      text eol=lf
+*.dts     text eol=lf
+*.mk      text eol=lf
+*.config  text eol=lf
+*.yml     text eol=lf
+*.md      text eol=lf
+
+# uci-defaults 里的脚本没有扩展名，单独指定
+files/etc/uci-defaults/*  text eol=lf

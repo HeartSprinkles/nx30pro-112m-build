@@ -1,0 +1,156 @@
+# H3C Magic NX30 Pro · 112M 大分区 ImmortalWrt 固件（GitHub Actions 自动编译）
+
+用 GitHub Actions 云端编译 **H3C 新华三 NX30 Pro** 的 ImmortalWrt 固件：
+
+| 项目 | 内容 |
+| --- | --- |
+| 源码 | [chasey-dev/immortalwrt-mt798x-rebase](https://github.com/chasey-dev/immortalwrt-mt798x-rebase) 分支 `25.12`（内核 6.12） |
+| 分区 | jerryhan77 的 **112M 大分区**布局（`ubi` 从 64M 扩到 112M） |
+| 主题 | [rchen14b/luci-theme-glass](https://github.com/rchen14b/luci-theme-glass)（毛玻璃风格，已设为默认主题） |
+| 代理 | [nikkinikki-org/OpenWrt-nikki](https://github.com/nikkinikki-org/OpenWrt-nikki)（mihomo 透明代理，含 `mihomo-meta` 内核） |
+| 刷写 | 通过 [Yuzhii0718/bl-mt798x-dhcpd](https://github.com/Yuzhii0718/bl-mt798x-dhcpd) 的 U-Boot Web UI 刷入 |
+
+---
+
+## 一、快速开始
+
+1. 在 GitHub 新建一个仓库（Public 或 Private 都可以）。
+2. 把本目录下**所有文件**（包括隐藏目录 `.github/`）推上去：
+
+   ```bash
+   cd nx30pro-112m-build
+   git init
+   git add -A
+   git commit -m "init: NX30 Pro 112M build"
+   git branch -M main
+   git remote add origin https://github.com/<你的用户名>/<仓库名>.git
+   git push -u origin main
+   ```
+
+3. 打开仓库 → **Actions** 标签 → 左侧 `Build ImmortalWrt (NX30 Pro 112M)` → **Run workflow**。
+4. 约 2~4 小时后（`mihomo-meta` 要从源码编译，比较慢），在本次运行页面的 **Artifacts** 下载 `immortalwrt-h3c_magic-nx30-pro-112m`。
+   也可以打 tag 触发，会自动创建 Release：`git tag v1.0 && git push origin v1.0`。
+
+> 失败时下载 `build-log` 工件，里面是完整的编译输出。
+
+---
+
+## 二、目录结构
+
+```
+.
+├── .github/workflows/build.yml          # 编译流水线
+├── configs/nx30pro-112m.config          # 配置种子（make defconfig 会补全其余项）
+├── device/h3c_magic-nx30-pro-112m.mk    # 设备定义，追加到 filogic.mk
+├── dts/mt7981b-h3c-magic-nx30-pro-112m.dts   # 112M 分区设备树
+├── files/etc/uci-defaults/99-nx30pro-112m    # 首启设置默认主题/中文
+└── scripts/apply-nx30pro-112m.sh        # 把上面这些注入源码树（含 MAC 降级补丁）
+```
+
+流水线做的事：克隆源码 → 加 nikki feed + Glass 主题 → 拉取 feeds → 注入 DTS/设备定义 → `make defconfig` →
+校验设备与软件包真的被选中 → 下载依赖 → 编译 → 收集产物。
+
+---
+
+## 三、分区布局（关键）
+
+```
+偏移        大小      名称
+0x0000000   1M        BL2            (U-Boot 引导链，不动)
+0x0100000   0.5M      u-boot-env     (U-Boot 环境变量)
+0x0180000   2M        Factory        (无线校准数据，不动)
+0x0380000   2M        FIP            (U-Boot 本体)
+0x0580000   112M      ubi            ← 原厂 64M，这里扩到 112M
+```
+
+原厂的 `pdt_data` / `pdt_data_1` / `exp` / `plugin` 四个分区被合并进 `ubi`，这就是多出来的 48M 空间（主要给 overlay / Docker / nikki 规则等）。
+
+⚠️ **两个副作用，必须知道：**
+
+1. **原机 MAC 会丢**。原厂固件把以太网 MAC 以文本形式存在 `pdt_data_1` 分区里，大分区布局不再有这个分区。
+   构建脚本给 `board.d/02_network` 打了降级补丁（`pdt_data_1` → `Factory` → U-Boot 环境变量），
+   但**刷机前请先记下原 MAC**，刷完后在 LuCI「网络 → 接口 → 设备」里核对，必要时手动填：
+   ```sh
+   # 在原厂/旧固件上执行
+   mtd_get_mac_ascii pdt_data_1 ethaddr
+   ```
+2. **原厂插件与出厂信息不可恢复**（除非你有整片 flash 备份）。刷机第一步永远是备份。
+
+> DTS 里的 `compatible` 故意保持 `h3c,magic-nx30-pro` 不变，只改 `model`。
+> 因为 `board.d/02_network` 是按 `board_name` 匹配来分配 LAN/WAN 口的，改了会导致没网。
+
+---
+
+## 四、刷机步骤
+
+### 4.0 前置条件
+
+U-Boot 必须是 **ubootmod（FIT）变体**，因为本固件是 OpenWrt U-Boot 布局（`KERNEL_IN_UBI=1` + `fit` UBI 卷）。
+
+- 如果现在装的是 bl-mt798x 的 `default`（NMBM）变体，需要换成 `ubootmod` 变体：
+  fork [bl-mt798x-dhcpd](https://github.com/Yuzhii0718/bl-mt798x-dhcpd) → 用它自带的 Actions 编译，
+  参数 `BOARD=h3c_magic-nx30-pro`、`VERSION=2025`、`VARIANT=ubootmod`；
+  或者本地 `make BOARD=h3c_magic-nx30-pro VERSION=2025 VARIANT=ubootmod`。
+- 换 BL2 有变砖风险，请备好 TTL + [mtk_uartboot](https://github.com/981213/mtk_uartboot)。
+
+### 4.1 备份（务必）
+
+网线接 LAN 口，按住 reset 上电进入 failsafe Web UI（`http://192.168.1.1` 或 `http://failsafe.lan`），
+用 **Backup** 功能下载整片 flash 备份，另存好。
+
+### 4.2 让 U-Boot 的 ubi 分区等于 112M
+
+`ubootmod` 变体编译时 `FIXED_MTDPARTS` 被强制关闭，所以分区表可以由环境变量覆盖。
+在 Web UI 的 **环境变量 / Environment** 页面添加（或在串口里 `setenv`）：
+
+```
+mtdparts=spi-nand0:1024k(bl2),512k(u-boot-env),2048k(Factory),2048k(fip),114688k(ubi)
+mtdids=spi-nand0=spi-nand0
+```
+
+保存并重启。然后在 Web UI 里确认 `ubi` 分区是 **112M / 114688k**。
+
+> 这里必须写死 `114688k`，不要写 `-(ubi)`。`-` 表示“到 flash 末尾”（会变成 122.5M），
+> 与内核 DTS 的 112M 不一致，会导致 UBI 挂载失败。
+> 如果环境变量改了不生效，说明当前 U-Boot 是固定分区版本，请重新编译 `VARIANT=ubootmod`。
+
+### 4.3 刷入固件
+
+1. Web UI → **Flash editor** → 选中 `ubi` → **Erase**（NAND 设备必须擦除，否则旧的 UBI 元数据会干扰）。
+2. Web UI → **固件升级 / Firmware upgrade** → 上传 `*-sysupgrade.itb`。
+3. 等待写入完成，设备自动重启（首次启动要格式化 overlay，约 1~2 分钟）。
+4. 浏览器打开 `http://192.168.1.1`，无密码直接登录。
+
+### 4.4 救砖 / 验证
+
+- `*-recovery.itb` 是 initramfs 镜像，可以在 Web UI 的 **Initramfs** 里直接内存启动，用来验证固件是否正常，不写 flash。
+- 真砖了：TTL 接串口 → `mtk_uartboot` 推一个 RAM 版 BL2 → 进 Web UI 重刷 BL2/FIP。
+
+---
+
+## 五、开机后
+
+- **主题**：已经是 Glass（`/luci-static/glass`），可在「系统 → 系统 → 语言和界面」里换回。
+- **nikki**：菜单「服务 → Nikki」，导入订阅后开启即可；内核是 `mihomo`（本固件里由 `mihomo-meta` 提供）。
+- **overlay 空间**：`df -h` 应能看到 ~110M 左右的可用空间。
+
+---
+
+## 六、自定义
+
+| 想改什么 | 改哪里 |
+| --- | --- |
+| 加软件包 | `configs/nx30pro-112m.config` 里加 `CONFIG_PACKAGE_xxx=y` |
+| 改分区大小 | 同时改三处：DTS 的 `reg`、`device/*.mk` 的 `IMAGE_SIZE`、刷机时的 `mtdparts` |
+| 换/加主题 | `.github/workflows/build.yml` 里 clone 主题那一步 + `files/etc/uci-defaults/` |
+| 换源码分支 | workflow 里的 `REPO_BRANCH`（注意其它分支不一定是 6.12 内核，DTS 目录结构可能不同） |
+| 默认语言/主机名 | `files/etc/uci-defaults/99-nx30pro-112m` |
+
+---
+
+## 七、已知限制
+
+- **只编译一个设备**，没有开 `CONFIG_ALL`，所以镜像里只有固件必需的包；想加包请写进 config 种子。
+- 大分区布局**不能**用官方 OpenWrt 的 `sysupgrade` 从原厂固件直升，只能走 U-Boot Web UI。
+- 如果你把 `IMAGE_SIZE` 改小于实际 rootfs，编译最后一步会报 `Image too big`，按提示加大即可。
+- 本仓库不包含 U-Boot 的编译（用上游 bl-mt798x-dhcpd 的 Actions 即可），也不对你的设备安全负责——刷机前请备份。
