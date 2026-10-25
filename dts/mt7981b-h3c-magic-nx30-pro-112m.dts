@@ -50,7 +50,7 @@
 	 * board.d/02_network and other userspace helpers match on board_name.
 	 * Only "model" is changed so the two images can be told apart.
 	 */
-	model = "H3C Magic NX30 Pro (112M)";
+	model = "H3C Magic NX30 Pro 112M (MTK U-Boot layout)";
 	compatible = "h3c,magic-nx30-pro", "mediatek,mt7981";
 
 	aliases {

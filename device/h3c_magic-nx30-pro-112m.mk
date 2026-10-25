@@ -1,17 +1,17 @@
 #-------------------------------------------------------------
-# H3C Magic NX30 Pro - 112M large partition layout
+# H3C Magic NX30 Pro 112M (MTK U-Boot layout)
 # Appended to target/linux/mediatek/image/filogic.mk at build time
 #
-# Cloned from Device/h3c_magic-nx30-pro (OpenWrt U-Boot layout), the only
-# differences are DEVICE_DTS, IMAGE_SIZE and the DTS file itself.
+# 克隆自 Device/h3c_magic-nx30-pro，仅改动 DEVICE_DTS / IMAGE_SIZE /
+# DEVICE_MODEL / DEVICE_VARIANT 以及 DTS 文件本身。
 #
-# IMAGE_SIZE == size of the ubi partition (0x7000000 = 112M = 114688k),
-# same convention as the stock definition (0x4000000 = 64M = 65536k).
+# IMAGE_SIZE == ubi 分区大小（0x7000000 = 112M = 114688k），
+# 与原厂定义（0x4000000 = 64M = 65536k）保持同一约定。
 #-------------------------------------------------------------
 define Device/h3c_magic-nx30-pro-112m
   DEVICE_VENDOR := H3C
-  DEVICE_MODEL := Magic NX30 Pro
-  DEVICE_VARIANT := (112M OpenWrt U-Boot layout)
+  DEVICE_MODEL := Magic NX30 Pro 112M
+  DEVICE_VARIANT := (MTK U-Boot layout)
   DEVICE_DTS := mt7981b-h3c-magic-nx30-pro-112m
   DEVICE_DTS_DIR := ../dts
   SUPPORTED_DEVICES := h3c,magic-nx30-pro
