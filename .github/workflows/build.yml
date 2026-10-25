@@ -115,30 +115,13 @@ jobs:
 
       # 以源码自带的 defconfig/mt7981-ax3000.config 为基准，
       # 保留其全部软件包/工具链/DEVEL 设置，只把设备列表裁到我们这一个。
+      # 所有硬性校验都在 scripts/configure.sh 里（与 config-check 工作流共用）。
       - name: Configure
         run: |
           bash scripts/configure.sh openwrt
           cd openwrt
-
-          echo "--- 关键配置校验 ---"
-          rc=0
-          # CONFIG_TARGET_PROFILE 是最终决定编哪个设备的东西
-          grep -qx 'CONFIG_TARGET_PROFILE="DEVICE_h3c_magic-nx30-pro-112m"' .config \
-            || { echo "::error::TARGET_PROFILE 不是 h3c_magic-nx30-pro-112m（设备定义未生效？）"; rc=1; }
-          grep -qx 'CONFIG_PACKAGE_luci-theme-glass=y' .config \
-            || { echo "::error::luci-theme-glass 未被选中"; rc=1; }
-          grep -qx 'CONFIG_PACKAGE_luci-app-nikki=y' .config \
-            || { echo "::error::luci-app-nikki 未被选中"; rc=1; }
-          grep -qE '^CONFIG_PACKAGE_mihomo(-meta)?=y' .config \
-            || { echo "::error::mihomo 内核未被选中"; rc=1; }
-          # 设备列表必须只剩我们这一个
-          n=$(grep -c '^CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_.*=y' .config || true)
-          [ "$n" = "1" ] || { echo "::error::设备条目应为 1 个，实际 ${n} 个"; rc=1; }
-          if [ "$rc" != "0" ]; then
-            grep -E 'h3c|nikki|glass|mihomo' .config || true
-            exit 1
-          fi
-          grep -E 'CONFIG_TARGET_PROFILE|DEVICE_h3c|CONFIG_PACKAGE_(luci-app-nikki|luci-theme-glass|mihomo)|CONFIG_CCACHE' .config
+          echo "--- 关键行 ---"
+          grep -E 'CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_.*=y|CONFIG_PACKAGE_(luci-app-nikki|luci-theme-glass|mihomo)|CONFIG_CCACHE|CONFIG_DEVEL' .config || true
 
       - name: Download package sources
         continue-on-error: true
