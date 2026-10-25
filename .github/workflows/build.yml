@@ -192,7 +192,8 @@ jobs:
           ls -lh openwrt/bin/targets/mediatek/filogic/
           find openwrt/bin/targets/mediatek/filogic -maxdepth 1 -type f \
             \( -name '*sysupgrade.itb' -o -name '*recovery.itb' -o -name 'sha256sums' \
-               -o -name 'profiles.json' -o -name 'config.buildinfo' -o -name '*.manifest' \) \
+               -o -name 'profiles.json' -o -name 'config.buildinfo' -o -name '*.manifest' \
+               -o -name 'feeds.buildinfo' \) \
             -exec cp -v {} artifacts/ \;
           ls -lh artifacts/
 
@@ -204,9 +205,44 @@ jobs:
           if-no-files-found: error
           compression-level: 6
 
-      - name: Create release
-        if: startsWith(github.ref, 'refs/tags/')
+      # 每次构建成功都发 Release（不再只限打 tag）。
+      # 打 tag 触发时用该 tag；手动触发时用 v25.12-112m-YYYYMMDD-HHMM。
+      - name: Make release tag
+        id: rel
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            tag="${GITHUB_REF#refs/tags/}"
+          else
+            tag="v25.12-112m-$(date +%Y%m%d-%H%M)"
+          fi
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "release tag: ${tag}"
+
+      - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.rel.outputs.tag }}
+          name: ImmortalWrt 25.12 · NX30 Pro 112M · ${{ steps.rel.outputs.tag }}
           files: artifacts/*
-          generate_release_notes: true
+          body: |
+            ## H3C Magic NX30 Pro 112M (MTK U-Boot layout)
+
+            | 项 | 值 |
+            | --- | --- |
+            | 源码 | `chasey-dev/immortalwrt-mt798x-rebase` @ `25.12`（kernel 6.12） |
+            | 配置 | 源码自带 `defconfig/mt7981-ax3000.config`，设备列表裁到本机型一个 |
+            | 分区 | 112M 大分区（`ubi` 0x580000 + 0x7000000） |
+            | WiFi | MTK 闭源 **mt_wifi**（`kmod-mt_wifi` + `mtwifi-cfg-ucode` + `luci-app-mtwifi-cfg`），不含 mt76 |
+            | 主题 | Glass（默认） |
+            | 代理 | nikki + mihomo |
+            | 构建 | Actions run `${{ github.run_id }}` |
+
+            ### 刷机
+
+            1. 网线接 LAN，进 u-boot failsafe（`http://192.168.1.1`），**先 Backup 整片 flash**
+            2. 确认 MTD layout = `immortalwrt-112m`（ubi = 112M）
+            3. 固件升级页上传 `*-sysupgrade.itb`；`*-recovery.itb` 可内存启动验证
+            4. 刷机前记录原机 MAC（112M 布局会覆盖 `pdt_data_1`）
+
+            > 本固件在 `bl-mt798x default`（NMBM）变体上实测可启动：该闪存 0 坏块、
+            > NMBM 映射恒等，内核虽无 NMBM 驱动也能正确读取。
