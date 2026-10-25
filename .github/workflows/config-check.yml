@@ -94,4 +94,6 @@ jobs:
           path: |
             openwrt/.config
             /tmp/config-report.txt
+          # .config 是隐藏文件，v4 默认不打包隐藏文件，必须显式开启
+          include-hidden-files: true
           if-no-files-found: error
