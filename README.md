@@ -46,7 +46,7 @@
 ├── configs/nx30pro-112m.config          # 增量配置（只写模板里没有的项）
 ├── device/h3c_magic-nx30-pro-112m.mk    # 设备定义，追加到 filogic.mk
 ├── dts/mt7981b-h3c-magic-nx30-pro-112m.dts   # 112M 分区设备树
-├── files/etc/uci-defaults/99-nx30pro-112m    # 首启设置默认主题/中文
+├── files/etc/uci-defaults/99-nx30pro-112m.sh  # 首启设置默认主题/中文（需可执行位）
 ├── scripts/apply-nx30pro-112m.sh        # 注入 DTS/设备定义/files，含 MAC 降级补丁
 └── scripts/configure.sh                 # 模板 → 裁设备 → 叠加增量 → defconfig → 硬校验
 ```
@@ -172,7 +172,7 @@ mtdparts=nmbm0:1024k(bl2),512k(u-boot-env),2048k(Factory),2048k(fip),112M(ubi)
 | 改分区大小 | 同时改三处：DTS 的 `reg`、`device/*.mk` 的 `IMAGE_SIZE`、刷机时的 `mtdparts` |
 | 换/加主题 | `.github/workflows/build.yml` 里 clone 主题那一步 + `files/etc/uci-defaults/` |
 | 换源码分支 | workflow 里的 `REPO_BRANCH`（注意其它分支不一定是 6.12 内核，DTS 目录结构可能不同） |
-| 默认语言/主机名 | `files/etc/uci-defaults/99-nx30pro-112m` |
+| 默认语言/主机名 | `files/etc/uci-defaults/99-nx30pro-112m.sh` |
 
 ---
 
