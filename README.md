@@ -30,8 +30,12 @@
    ```
 
 3. 打开仓库 → **Actions** 标签 → 左侧 `Build ImmortalWrt (NX30 Pro 112M)` → **Run workflow**。
-4. 约 2~4 小时后（`mihomo-meta` 要从源码编译，比较慢），在本次运行页面的 **Artifacts** 下载 `immortalwrt-h3c_magic-nx30-pro-112m`。
-   也可以打 tag 触发，会自动创建 Release：`git tag v1.0 && git push origin v1.0`。
+4. 约 1.5~3 小时后（实测 1 小时 32 分；`mihomo-meta` 要从源码编译），在本次运行页面的 **Artifacts** 下载 `immortalwrt-h3c_magic-nx30-pro-112m`。
+   也可以打 tag 触发：`git tag v1.0 && git push origin v1.0`。
+
+> **每次构建成功都会自动发布 Release**（无需手动操作）：手动触发时 tag 为
+> `v25.12-112m-YYYYMMDD-HHMM`，打 tag 触发时直接用你的 tag。正文会带上源码、分区、
+> WiFi 方案和刷机要点，产物含 `sysupgrade.itb` / `recovery.itb` / `sha256sums` / `.manifest` 等。
 
 > 失败时下载 `build-log` 工件，里面是完整的编译输出。
 
