@@ -14,11 +14,11 @@ if [ ! -d "$TOP/target/linux/mediatek" ]; then
 	exit 1
 fi
 
-echo "==> [1/4] 安装 112M DTS"
+echo "==> [1/3] 安装 112M DTS"
 install -m 0644 "$SRC/dts/mt7981b-h3c-magic-nx30-pro-112m.dts" \
 	"$TOP/target/linux/mediatek/dts/mt7981b-h3c-magic-nx30-pro-112m.dts"
 
-echo "==> [2/4] 注册新设备 h3c_magic-nx30-pro-112m"
+echo "==> [2/3] 注册新设备 h3c_magic-nx30-pro-112m"
 FILOGIC_MK="$TOP/target/linux/mediatek/image/filogic.mk"
 if grep -q 'Device/h3c_magic-nx30-pro-112m' "$FILOGIC_MK"; then
 	echo "    已存在，跳过"
@@ -27,11 +27,7 @@ else
 	cat "$SRC/device/h3c_magic-nx30-pro-112m.mk" >> "$FILOGIC_MK"
 fi
 
-echo "==> [3/4] 安装自定义 files/ (默认主题、中文等)"
-mkdir -p "$TOP/files"
-cp -a "$SRC/files/." "$TOP/files/"
-
-echo "==> [4/4] 给 NX30 Pro 的 MAC 获取加降级链"
+echo "==> [3/3] 给 NX30 Pro 的 MAC 获取加降级链"
 # 112M 布局不再保留 pdt_data_1 分区，而 stock 的 02_network 正是从
 # pdt_data_1 里读 ASCII 文件 ethaddr 来取 MAC 的。这里追加
 # Factory / u-boot 环境变量 的降级读取，避免刷机后 MAC 随机。

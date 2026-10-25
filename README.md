@@ -50,22 +50,21 @@
 ├── configs/nx30pro-112m.config          # 增量配置（只写模板里没有的项）
 ├── device/h3c_magic-nx30-pro-112m.mk    # 设备定义，追加到 filogic.mk
 ├── dts/mt7981b-h3c-magic-nx30-pro-112m.dts   # 112M 分区设备树
-├── files/etc/uci-defaults/99-nx30pro-112m.sh  # 首启设置中文界面（需可执行位）
-├── scripts/apply-nx30pro-112m.sh        # 注入 DTS/设备定义/files，含 MAC 降级补丁
+├── scripts/apply-nx30pro-112m.sh        # 注入 DTS/设备定义，含 MAC 降级补丁
 └── scripts/configure.sh                 # 模板 → 裁设备 → 叠加增量 → defconfig → 硬校验
 ```
 
 流水线只做四件"必须做的事"，其余一概不动：
 
 1. **取模板**：`cp defconfig/mt7981-ax3000.config .config`
-2. **裁设备**：删掉模板里其它 91 个设备，只留 `h3c_magic-nx30-pro-112m`
-3. **注入 112M**：新 DTS、设备定义、`02_network` 的 MAC 降级、首启配置
+2. **裁设备**：删掉模板里全部 92 个设备，只留 `h3c_magic-nx30-pro-112m`
+3. **注入 112M**：新 DTS、设备定义、`02_network` 的 MAC 降级
 4. **加一个 feed**：nikki
 
 软件包 / 工具链 / `CONFIG_DEVEL` / 闭源 WiFi 开关全部沿用模板，不覆盖。
 
-> 想先验证配置、不花 2 小时编译，就跑 `Config Check (no build)` 这个工作流，
-> 它会在 2 分钟内生成 `.config` 并做硬校验（设备唯一性、主题、nikki、mt_wifi 等）。
+> 想先验证配置、不花 2 小时编译，就跑 `Config Check (no build)` 工作流，
+> 2 分钟生成 `.config` 并做硬校验（设备唯一性、nikki、mt_wifi 等）。
 
 ---
 
@@ -176,74 +175,12 @@ mtdparts=nmbm0:1024k(bl2),512k(u-boot-env),2048k(Factory),2048k(fip),112M(ubi)
 | 改分区大小 | 同时改三处：DTS 的 `reg`、`device/*.mk` 的 `IMAGE_SIZE`、刷机时的 `mtdparts` |
 | 换/加主题 | 在 config 里加 `CONFIG_PACKAGE_luci-theme-xxx=y`（模板已带 argon，不再是 Glass） |
 | 换源码分支 | workflow 里的 `REPO_BRANCH`（注意其它分支不一定是 6.12 内核，DTS 目录结构可能不同） |
-| 默认语言/主机名 | `files/etc/uci-defaults/99-nx30pro-112m.sh` |
 
 ---
 
 ## 七、已知限制
 
-- **只编译一个设备**（93 个里裁到 1），没有开 `CONFIG_ALL`；想加包请写进 `configs/nx30pro-112m.config`。
+- **只编译一个设备**（模板 92 个里裁到 1），没有开 `CONFIG_ALL`；想加包请写进 `configs/nx30pro-112m.config`。
 - 大分区布局**不能**用官方 OpenWrt 的 `sysupgrade` 从原厂固件直升，只能走 U-Boot Web UI。
 - 如果你把 `IMAGE_SIZE` 改小于实际 rootfs，编译最后一步会报 `Image too big`，按提示加大即可。
 - 本仓库不包含 U-Boot 的编译（用上游 bl-mt798x-dhcpd 的 Actions 即可），也不对你的设备安全负责——刷机前请备份。
-
----
-
-## 八、编译加速
-
-**为什么不能直接下现成的 .ipk**：`kmod-*` 的 ABI 绑死内核版本 + 补丁集，本源码是 MTK 魔改内核
-（HNAT / 私有补丁），官方仓库编出来的 kmod 装上去必然 `kernel version mismatch`；用户态包混用
-不同快照也容易符号缺失。所以走「缓存编译产物」而不是「下载别人的产物」。
-
-| 缓存 | 内容 | 命中后省下 |
-| --- | --- | --- |
-| `Restore build cache` | `dl/`、`build_dir/toolchain-*`、`staging_dir/toolchain-*`、`build_dir/host`、`staging_dir/host` | 约 45~60 分钟（工具链是构建里最贵的一段） |
-| `Restore ccache` | `~/.ccache`（限制 2GB） | 重复目标文件，约 20~30% |
-
-缓存 key 带 `hashFiles('configs/**','device/**','dts/**')`：改配置/DTS → key 变 → 冷启动（会重编工具链）；
-只改工作流 → key 不变 → 热启动。想强制清缓存，改 `CACHE_VER: v1` → `v2`。
-
-> 以后若频繁改包，最优解是 `make menuconfig` 勾上 *Build the OpenWrt SDK* 导出 SDK，
-> 之后只用 SDK 编增量，通常 10~20 分钟。
-
----
-
-## 九、调试安全：接设备前先隔离网络
-
-刷机/调试时路由器会被反复重启，**如果本机默认网关指向这台路由器，你的外网会跟着一起断**。
-接网线之前先做这三件事：
-
-1. **把调试网卡设成固定 IP、网关留空**
-
-   Windows「网络连接 → 以太网 → IPv4 属性」：
-
-   ```
-   IP 地址   192.168.1.190
-   子网掩码  255.255.255.0
-   默认网关  （留空）
-   DNS       （留空）
-   ```
-
-   这样这张网卡只做二层通信，永远抢不走默认路由。
-
-2. **确认默认路由仍在上网网卡上**
-
-   ```powershell
-   route print -4 | Select-String "0.0.0.0"
-   Get-NetRoute -DestinationPrefix 0.0.0.0/0 | Select-Object ifIndex,NextHop,RouteMetric
-   ```
-
-   只应该看到一条指向你真正上网那张网卡的默认路由。
-
-3. **访问设备时绕开本机代理**
-
-   ```bash
-   curl --noproxy '*' http://192.168.1.1/
-   ```
-
-   本机若开了 Clash / 系统代理，`http_proxy` 会把 192.168.1.1 也转发出去，表现为「设备明明在线却连不上」。
-
-调试完把网卡改回「自动获得 IP 地址」即可。
-
-> 另外：u-boot 的 failsafe 网页服务是**单线程**的，在它的网页控制台里跑 `ping` / `tftp`
-> 这类网络命令会把网卡 `eth_halt` 掉，网页服务当场死掉，只能断电重启。别在控制台里跑网络命令。
