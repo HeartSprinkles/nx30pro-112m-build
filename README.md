@@ -98,34 +98,49 @@
 
 ### 4.0 前置条件
 
-U-Boot 必须是 **ubootmod（FIT）变体**，因为本固件是 OpenWrt U-Boot 布局（`KERNEL_IN_UBI=1` + `fit` UBI 卷）。
+固件走的是 **OpenWrt U-Boot 布局**（`KERNEL_IN_UBI=1`，内核+rootfs 打包成 FIT 放进 UBI 卷 `fit`，
+内核用 `root=/dev/fit0` 挂根），所以 U-Boot 必须能**从 UBI 的 `fit` 卷启动 FIT**。
 
-- 如果现在装的是 bl-mt798x 的 `default`（NMBM）变体，需要换成 `ubootmod` 变体：
-  fork [bl-mt798x-dhcpd](https://github.com/Yuzhii0718/bl-mt798x-dhcpd) → 用它自带的 Actions 编译，
-  参数 `BOARD=h3c_magic-nx30-pro`、`VERSION=2025`、`VARIANT=ubootmod`；
-  或者本地 `make BOARD=h3c_magic-nx30-pro VERSION=2025 VARIANT=ubootmod`。
-- 换 BL2 有变砖风险，请备好 TTL + [mtk_uartboot](https://github.com/981213/mtk_uartboot)。
+实测这台机器的情况（`/sysinfo`、`/env/list` 读出来的）：
+
+```
+U-Boot 2025.07.1-Mediatek  384fdd8  build_variant=default   ← NMBM 开启
+mtdids   = nmbm0=nmbm0
+mtdparts = nmbm0:1024k(bl2),512k(u-boot-env),2048k(Factory),2048k(fip),112M(ubi)
+nmbm0 bad     → 空（0 坏块）
+nmbm0 mapping → 空（逻辑块 == 物理块）
+```
+
+结论：**`default` 变体也能用，不需要换成 `ubootmod`**。原因有两条：
+
+1. 这个 u-boot 虽然叫 default，但已经支持从 UBI 卷 `fit` 启动 FIT（刷入时日志里是
+   `Updating volume 'fit' ... OK`），并且内置了 `immortalwrt-112m` 布局；
+2. 我们的内核**没有 NMBM 驱动**，但该闪存 0 坏块、NMBM 映射恒等，所以内核按裸 NAND 读到的
+   数据与 u-boot 通过 `nmbm0` 写入的完全一致——已实机验证可正常启动。
+
+> 唯一需要留意的长期风险：如果这块闪存将来出现坏块，u-boot 的 NMBM 会把坏块重映射到别处，
+> 而内核按裸地址读就会错位。真遇到这种情况，再换 `ubootmod` 变体（关 NMBM）即可，
+> 那一步要动 BL2、有变砖风险，需备好 TTL + [mtk_uartboot](https://github.com/981213/mtk_uartboot)。
 
 ### 4.1 备份（务必）
 
 网线接 LAN 口，按住 reset 上电进入 failsafe Web UI（`http://192.168.1.1` 或 `http://failsafe.lan`），
 用 **Backup** 功能下载整片 flash 备份，另存好。
 
-### 4.2 让 U-Boot 的 ubi 分区等于 112M
+### 4.2 确认 ubi 分区是 112M
 
-`ubootmod` 变体编译时 `FIXED_MTDPARTS` 被强制关闭，所以分区表可以由环境变量覆盖。
-在 Web UI 的 **环境变量 / Environment** 页面添加（或在串口里 `setenv`）：
+在 Web UI 首页确认 `MTD layout` 显示为 `immortalwrt-112m`，`ubi` 分区为 **112M / 114688k**。
+本机出厂即是这个值，一般无需改动：
 
 ```
-mtdparts=spi-nand0:1024k(bl2),512k(u-boot-env),2048k(Factory),2048k(fip),114688k(ubi)
-mtdids=spi-nand0=spi-nand0
+mtdparts=nmbm0:1024k(bl2),512k(u-boot-env),2048k(Factory),2048k(fip),112M(ubi)
 ```
 
-保存并重启。然后在 Web UI 里确认 `ubi` 分区是 **112M / 114688k**。
+如果显示的是原厂 64M 布局，在 **环境变量 / Environment** 页面改成上面这行（`nmbm0` 前缀要与
+`mtdids` 一致，不要写成 `spi-nand0`），保存并重启后再确认。
 
-> 这里必须写死 `114688k`，不要写 `-(ubi)`。`-` 表示“到 flash 末尾”（会变成 122.5M），
-> 与内核 DTS 的 112M 不一致，会导致 UBI 挂载失败。
-> 如果环境变量改了不生效，说明当前 U-Boot 是固定分区版本，请重新编译 `VARIANT=ubootmod`。
+> 必须写死 `112M`（或 `114688k`），不要用 `-(ubi)`。`-` 表示“到 flash 末尾”（约 122.5M），
+> 与内核 DTS 里的 112M 不一致，会导致 UBI 挂载失败。
 
 ### 4.3 刷入固件
 
