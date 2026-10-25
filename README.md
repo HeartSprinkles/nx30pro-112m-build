@@ -8,7 +8,7 @@
 | 配置 | 源码自带的 **`defconfig/mt7981-ax3000.config`** 为基准，只把设备列表裁到我们这一个 |
 | 分区 | **112M 大分区**布局（`ubi` 从 64M 扩到 112M，吃掉 `pdt_data`/`pdt_data_1`/`exp`/`plugin`） |
 | WiFi | MTK 闭源 **`mt_wifi`**（mtk-openwrt-feeds），不是开源 mt76 |
-| 主题 | [rchen14b/luci-theme-glass](https://github.com/rchen14b/luci-theme-glass)（毛玻璃风格，已设为默认主题） |
+| 主题 | `luci-theme-argon`（源码模板自带，已默认启用） |
 | 代理 | [nikkinikki-org/OpenWrt-nikki](https://github.com/nikkinikki-org/OpenWrt-nikki)（mihomo 透明代理，含 `mihomo-meta` 内核） |
 | 刷写 | 通过 [Yuzhii0718/bl-mt798x-dhcpd](https://github.com/Yuzhii0718/bl-mt798x-dhcpd) 的 U-Boot Web UI 刷入 |
 
@@ -50,7 +50,7 @@
 ├── configs/nx30pro-112m.config          # 增量配置（只写模板里没有的项）
 ├── device/h3c_magic-nx30-pro-112m.mk    # 设备定义，追加到 filogic.mk
 ├── dts/mt7981b-h3c-magic-nx30-pro-112m.dts   # 112M 分区设备树
-├── files/etc/uci-defaults/99-nx30pro-112m.sh  # 首启设置默认主题/中文（需可执行位）
+├── files/etc/uci-defaults/99-nx30pro-112m.sh  # 首启设置中文界面（需可执行位）
 ├── scripts/apply-nx30pro-112m.sh        # 注入 DTS/设备定义/files，含 MAC 降级补丁
 └── scripts/configure.sh                 # 模板 → 裁设备 → 叠加增量 → defconfig → 硬校验
 ```
@@ -60,7 +60,7 @@
 1. **取模板**：`cp defconfig/mt7981-ax3000.config .config`
 2. **裁设备**：删掉模板里其它 91 个设备，只留 `h3c_magic-nx30-pro-112m`
 3. **注入 112M**：新 DTS、设备定义、`02_network` 的 MAC 降级、首启配置
-4. **加两个 feed 级依赖**：nikki feed + Glass 主题
+4. **加一个 feed**：nikki
 
 软件包 / 工具链 / `CONFIG_DEVEL` / 闭源 WiFi 开关全部沿用模板，不覆盖。
 
@@ -162,7 +162,7 @@ mtdparts=nmbm0:1024k(bl2),512k(u-boot-env),2048k(Factory),2048k(fip),112M(ubi)
 
 ## 五、开机后
 
-- **主题**：已经是 Glass（`/luci-static/glass`），可在「系统 → 系统 → 语言和界面」里换回。
+- **主题**：`luci-theme-argon`（模板自带）。
 - **nikki**：菜单「服务 → Nikki」，导入订阅后开启即可；内核是 `mihomo`（本固件里由 `mihomo-meta` 提供）。
 - **overlay 空间**：`df -h` 应能看到 ~110M 左右的可用空间。
 

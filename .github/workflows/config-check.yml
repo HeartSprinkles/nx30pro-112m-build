@@ -13,7 +13,6 @@ permissions:
 env:
   REPO_URL: https://github.com/chasey-dev/immortalwrt-mt798x-rebase
   REPO_BRANCH: '25.12'
-  THEME_URL: https://github.com/rchen14b/luci-theme-glass
   NIKKI_FEED: https://github.com/nikkinikki-org/OpenWrt-nikki
   DEVICE: h3c_magic-nx30-pro-112m
   TZ: Asia/Shanghai
@@ -43,11 +42,10 @@ jobs:
           echo "source commit: $(git log -1 --pretty='%H %s')"
           echo "kernel: $(sed -n 's/^KERNEL_PATCHVER:=//p' target/linux/mediatek/Makefile)"
 
-      - name: Add nikki feed and Glass theme
+      - name: Add nikki feed
         run: |
           cd openwrt
           echo "src-git nikki ${NIKKI_FEED};main" >> feeds.conf.default
-          git clone --depth 1 "${THEME_URL}" package/luci-theme-glass
 
       - name: Update and install feeds
         run: |
@@ -82,7 +80,7 @@ jobs:
             grep -E '^CONFIG_PACKAGE_(kmod-mt_wifi|mtwifi-cfg|mtwifi-cfg-ucode|luci-app-mtwifi-cfg)=|^CONFIG_MTK_(CHIP_MT7981|MT_WIFI_DRIVER_VERSION)' .config || echo "  （无）"
             echo
             echo "主题 / 代理:"
-            grep -E '^CONFIG_PACKAGE_(luci-theme-glass|luci-app-nikki|nikki|mihomo)' .config || echo "  （无）"
+            grep -E '^CONFIG_PACKAGE_(luci-app-nikki|nikki|mihomo)' .config || echo "  （无）"
             echo
             echo ".config 总行数: $(wc -l < .config)"
           } | tee /tmp/config-report.txt

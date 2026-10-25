@@ -53,7 +53,7 @@ grep -E '^CONFIG_(DEVEL|TOOLCHAINOPTS|TARGET_MULTI_PROFILE)=' .config || true
 echo "--- WiFi（MTK 闭源 mt_wifi，模板已统一开启）---"
 grep -E '^CONFIG_PACKAGE_(kmod-mt_wifi|mtwifi-cfg|mtwifi-cfg-ucode|luci-app-mtwifi-cfg)=|^CONFIG_MTK_(CHIP_MT7981|MT_WIFI|WARP_V2)=|^CONFIG_MTK_MT_WIFI_DRIVER_VERSION' .config || echo "（无）"
 echo "--- 主题 / 代理 ---"
-grep -E '^CONFIG_PACKAGE_(luci-theme-glass|luci-app-nikki|nikki|mihomo|luci-i18n-nikki-zh-cn)=' .config || true
+grep -E '^CONFIG_PACKAGE_(luci-app-nikki|nikki|mihomo|luci-i18n-nikki-zh-cn)=' .config || true
 echo "--- 编译缓存 ---"
 grep -E '^CONFIG_CCACHE=' .config || true
 echo "============================================="
@@ -73,8 +73,6 @@ fi
 n=$(grep -c '^CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_.*=y' .config || true)
 [ "$n" = "1" ] || { echo "::error::设备条目应为 1 个，实际 ${n} 个（裁剪失效？）"; rc=1; }
 
-grep -qx 'CONFIG_PACKAGE_luci-theme-glass=y' .config \
-	|| { echo "::error::luci-theme-glass 未被选中"; rc=1; }
 grep -qx 'CONFIG_PACKAGE_luci-app-nikki=y' .config \
 	|| { echo "::error::luci-app-nikki 未被选中"; rc=1; }
 grep -qE '^CONFIG_PACKAGE_mihomo(-meta)?=y' .config \
@@ -102,7 +100,7 @@ fi
 if [ "$rc" != "0" ]; then
 	echo
 	echo "--- 诊断 ---"
-	grep -E 'h3c|nikki|glass|mihomo|mt79|wpad' .config || true
+	grep -E 'h3c|nikki|mihomo|mt79|wpad' .config || true
 	exit 1
 fi
 

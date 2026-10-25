@@ -16,7 +16,6 @@ concurrency:
 env:
   REPO_URL: https://github.com/chasey-dev/immortalwrt-mt798x-rebase
   REPO_BRANCH: '25.12'
-  THEME_URL: https://github.com/rchen14b/luci-theme-glass
   NIKKI_FEED: https://github.com/nikkinikki-org/OpenWrt-nikki
   DEVICE: h3c_magic-nx30-pro-112m
   TZ: Asia/Shanghai
@@ -103,11 +102,10 @@ jobs:
             echo "❌ 未命中（首次或配置有变更），本次会全量编工具链"
           fi
 
-      - name: Add nikki feed and Glass theme
+      - name: Add nikki feed
         run: |
           cd openwrt
           echo "src-git nikki ${NIKKI_FEED};main" >> feeds.conf.default
-          git clone --depth 1 "${THEME_URL}" package/luci-theme-glass
           echo "--- feeds.conf.default ---"
           cat feeds.conf.default
 
@@ -128,7 +126,7 @@ jobs:
           bash scripts/configure.sh openwrt
           cd openwrt
           echo "--- 关键行 ---"
-          grep -E 'CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_.*=y|CONFIG_PACKAGE_(luci-app-nikki|luci-theme-glass|mihomo)|CONFIG_CCACHE|CONFIG_DEVEL' .config || true
+          grep -E 'CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_.*=y|CONFIG_PACKAGE_(luci-app-nikki|mihomo)|CONFIG_CCACHE|CONFIG_DEVEL' .config || true
 
       - name: Download package sources
         continue-on-error: true
@@ -165,7 +163,7 @@ jobs:
           echo "manifest: $MAN"
           rc=0
           for p in kmod-mt_wifi mtwifi-cfg-ucode luci-app-mtwifi-cfg \
-                   luci-theme-glass luci-app-nikki nikki mihomo; do
+                   luci-app-nikki nikki mihomo; do
             if grep -qE "^${p}[[:space:]-]" "$MAN"; then
               echo "✓ $p"
             else
@@ -180,7 +178,7 @@ jobs:
           fi
           if [ "$rc" != "0" ]; then
             echo "--- 实际包含的相关包 ---"
-            grep -iE "mt_wifi|mtwifi|mt79|wpad|glass|nikki|mihomo" "$MAN" || true
+            grep -iE "mt_wifi|mtwifi|mt79|wpad|nikki|mihomo" "$MAN" || true
             exit 1
           fi
           echo "--- WiFi 相关包 ---"
@@ -233,7 +231,7 @@ jobs:
             | 配置 | 源码自带 `defconfig/mt7981-ax3000.config`，设备列表裁到本机型一个 |
             | 分区 | 112M 大分区（`ubi` 0x580000 + 0x7000000） |
             | WiFi | MTK 闭源 **mt_wifi**（`kmod-mt_wifi` + `mtwifi-cfg-ucode` + `luci-app-mtwifi-cfg`），不含 mt76 |
-            | 主题 | Glass（默认） |
+            | 主题 | luci-theme-argon（模板自带） |
             | 代理 | nikki + mihomo |
             | 构建 | Actions run `${{ github.run_id }}` |
 
