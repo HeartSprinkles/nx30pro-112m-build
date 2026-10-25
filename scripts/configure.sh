@@ -50,8 +50,8 @@ echo "设备条目数: $(grep -c '^CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_
 grep -E '^CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_.*=y' .config || true
 echo "--- 工具链 / 开发选项（按模板保留）---"
 grep -E '^CONFIG_(DEVEL|TOOLCHAINOPTS|TARGET_MULTI_PROFILE)=' .config || true
-echo "--- WiFi（模板不写 CONFIG_PACKAGE_*，靠设备定义 DEVICE_PACKAGES → MODULE_DEFAULT）---"
-grep -E 'mt7915|mt7981-firmware|mt7981-wo|wpad-openssl' .config || echo "（无）"
+echo "--- WiFi（MTK 闭源 mt_wifi，模板已统一开启）---"
+grep -E '^CONFIG_PACKAGE_(kmod-mt_wifi|mtwifi-cfg|mtwifi-cfg-ucode|luci-app-mtwifi-cfg)=|^CONFIG_MTK_(CHIP_MT7981|MT_WIFI|WARP_V2)=|^CONFIG_MTK_MT_WIFI_DRIVER_VERSION' .config || echo "（无）"
 echo "--- 主题 / 代理 ---"
 grep -E '^CONFIG_PACKAGE_(luci-theme-glass|luci-app-nikki|nikki|mihomo|luci-i18n-nikki-zh-cn)=' .config || true
 echo "--- 编译缓存 ---"
@@ -80,19 +80,23 @@ grep -qx 'CONFIG_PACKAGE_luci-app-nikki=y' .config \
 grep -qE '^CONFIG_PACKAGE_mihomo(-meta)?=y' .config \
 	|| { echo "::error::mihomo 内核未被选中"; rc=1; }
 
-# WiFi：模板不写 CONFIG_PACKAGE_kmod-mt7915e，而是由设备 DEVICE_PACKAGES 生成
-# CONFIG_MODULE_DEFAULT_* 。两者任一存在即视为通过。
-if grep -qE '^CONFIG_PACKAGE_kmod-mt7915e=y|^CONFIG_MODULE_DEFAULT_kmod-mt7915e=y' .config; then
-	echo "WiFi 驱动: 已包含"
-else
-	echo "::error::WiFi 驱动 kmod-mt7915e 未生效"
+# WiFi：本树用的是 MTK 闭源 mt_wifi（mtk-openwrt-feeds），不是开源 mt76。
+# 它由模板统一开启（CONFIG_PACKAGE_kmod-mt_wifi / mtwifi-cfg / luci-app-mtwifi-cfg），
+# 不放在设备 DEVICE_PACKAGES 里。
+grep -qx 'CONFIG_PACKAGE_kmod-mt_wifi=y' .config \
+	|| { echo "::error::闭源 WiFi 驱动 kmod-mt_wifi 未启用"; rc=1; }
+grep -qx 'CONFIG_PACKAGE_luci-app-mtwifi-cfg=y' .config \
+	|| { echo "::error::luci-app-mtwifi-cfg 未启用（LuCI 里会没有无线菜单）"; rc=1; }
+grep -q '^CONFIG_MTK_CHIP_MT7981=y' .config \
+	|| { echo "::error::CONFIG_MTK_CHIP_MT7981 未置位，mt_wifi 会编错芯片版本"; rc=1; }
+
+# 反向检查：mt76 与闭源驱动抢同一个硬件，不能共存
+if grep -qE '^CONFIG_PACKAGE_kmod-mt7915e=y|^CONFIG_MODULE_DEFAULT_kmod-mt7915e=y|^CONFIG_PACKAGE_mt7981-wo-firmware=y' .config; then
+	echo "::error::检测到开源 mt76（kmod-mt7915e / mt7981-wo-firmware）与闭源驱动共存"
+	echo "          二者会抢同一块 WiFi 硬件，请从 DEVICE_PACKAGES 里去掉"
 	rc=1
-fi
-if grep -qE '^CONFIG_PACKAGE_mt7981-wo-firmware=y|^CONFIG_MODULE_DEFAULT_mt7981-wo-firmware=y' .config; then
-	echo "WiFi 固件: 已包含"
 else
-	echo "::error::WiFi 固件 mt7981-wo-firmware 未生效"
-	rc=1
+	echo "WiFi 驱动: kmod-mt_wifi（闭源，无 mt76 冲突）"
 fi
 
 if [ "$rc" != "0" ]; then

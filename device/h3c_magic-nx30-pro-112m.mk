@@ -28,9 +28,16 @@ define Device/h3c_magic-nx30-pro-112m
 	fit lzma $$(KDIR)/image-$$(firstword $$(DEVICE_DTS)).dtb with-initrd | pad-to 64k
   IMAGE/sysupgrade.itb := append-kernel | \
 	fit gzip $$(KDIR)/image-$$(firstword $$(DEVICE_DTS)).dtb external-static-with-rootfs | append-metadata
-  # 上游 Device/h3c_magic-nx30-pro 的 DEVICE_PACKAGES 是空的，直接照抄会导致
-  # 固件里没有任何 WiFi 驱动/固件（LuCI 里看不到"无线"菜单）。
-  # 这里补上 MT7981 的标准三件套（同类设备 asus_rt-ax57m / cudy_m3000 等都是这么写的）。
-  DEVICE_PACKAGES := kmod-mt7915e kmod-mt7981-firmware mt7981-wo-firmware
+  # WiFi 用 MTK 闭源驱动（mtk-openwrt-feeds 的 mt_wifi），不是开源 mt76。
+  # 相关开关由 defconfig 模板统一打开，对所有设备生效，所以这里保持空：
+  #   CONFIG_PACKAGE_kmod-mt_wifi=y            （KernelPackage/mt_wifi）
+  #   CONFIG_MTK_CHIP_MT7981=y
+  #   CONFIG_MTK_MT_WIFI_DRIVER_VERSION_7673=y
+  #   CONFIG_MTK_MT_WIFI_FIRMWARE_PATH_MT7981="mt7981-fw-20260601"
+  #   CONFIG_PACKAGE_mtwifi-cfg-ucode=y
+  #   CONFIG_PACKAGE_luci-app-mtwifi-cfg=y
+  # ⚠️ 不要再加 kmod-mt7915e / kmod-mt7981-firmware / mt7981-wo-firmware：
+  #    mt76 与 mt_wifi 会抢同一个 WiFi 硬件，导致两边都起不来。
+  DEVICE_PACKAGES :=
 endef
 TARGET_DEVICES += h3c_magic-nx30-pro-112m
