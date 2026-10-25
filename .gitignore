@@ -1,5 +1,11 @@
-# 本地监控辅助脚本，不入库
-.watch_run.py
 
+# 本地监控辅助脚本，不入库
 # 本地试编译时的源码目录
+.monitor.log
+.monitor_release.py
+.release-notes.md
+.watch_run.py
+__pycache__/
+backup/
 openwrt/
+release-out/

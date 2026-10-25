@@ -1,0 +1,97 @@
+name: Config Check (no build)
+
+# 只做「克隆 → feeds → 注入设备 → 生成 .config → 校验」，不编译。
+# 目的：在花 2~3 小时编译之前，先确认配置（设备是否被选中、裁剪是否生效、
+# 主题/nikki 是否进来）是对的。产物里会带上完整的 .config 供审阅。
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  REPO_URL: https://github.com/chasey-dev/immortalwrt-mt798x-rebase
+  REPO_BRANCH: '25.12'
+  THEME_URL: https://github.com/rchen14b/luci-theme-glass
+  NIKKI_FEED: https://github.com/nikkinikki-org/OpenWrt-nikki
+  DEVICE: h3c_magic-nx30-pro-112m
+  TZ: Asia/Shanghai
+
+jobs:
+  config:
+    name: Generate & verify .config
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install minimal dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get -y install --no-install-recommends \
+            build-essential gawk gettext git libncurses-dev libssl-dev python3 \
+            python3-setuptools rsync unzip zlib1g-dev file wget curl \
+            bison flex patch perl time
+
+      - name: Clone ImmortalWrt source
+        run: |
+          git clone --depth 1 -b "${REPO_BRANCH}" "${REPO_URL}" openwrt
+          cd openwrt
+          echo "source commit: $(git log -1 --pretty='%H %s')"
+          echo "kernel: $(sed -n 's/^KERNEL_PATCHVER:=//p' target/linux/mediatek/Makefile)"
+
+      - name: Add nikki feed and Glass theme
+        run: |
+          cd openwrt
+          echo "src-git nikki ${NIKKI_FEED};main" >> feeds.conf.default
+          git clone --depth 1 "${THEME_URL}" package/luci-theme-glass
+
+      - name: Update and install feeds
+        run: |
+          cd openwrt
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      - name: Apply NX30 Pro 112M support
+        run: bash scripts/apply-nx30pro-112m.sh openwrt
+
+      - name: Generate .config from template
+        run: bash scripts/configure.sh openwrt
+
+      - name: Report details
+        run: |
+          cd openwrt
+          {
+            echo "===== 设备定义（注入后）====="
+            sed -n '/define Device\/h3c_magic-nx30-pro-112m/,/^endef/p' target/linux/mediatek/image/filogic.mk
+            echo
+            echo "===== 112M DTS 分区 ====="
+            grep -E 'label = "(ubi|BL2|u-boot-env|Factory|FIP)"' -A1 \
+              target/linux/mediatek/dts/mt7981b-h3c-magic-nx30-pro-112m.dts
+            echo
+            echo "===== .config 关键项 ====="
+            grep -E '^CONFIG_TARGET_(mediatek|mediatek_filogic|PROFILE|MULTI_PROFILE)=|^CONFIG_(DEVEL|TOOLCHAINOPTS|CCACHE)=' .config
+            echo
+            echo "选中设备数: $(grep -c '^CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_.*=y' .config || true)"
+            grep -E '^CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_.*=y' .config
+            echo
+            echo "WiFi 包（.config 中预期为空，由设备定义 DEVICE_PACKAGES 带入）:"
+            grep -E 'mt7915|mt7981-firmware|mt7981-wo|wpad' .config || echo "  （无）"
+            echo
+            echo "主题 / 代理:"
+            grep -E '^CONFIG_PACKAGE_(luci-theme-glass|luci-app-nikki|nikki|mihomo)' .config || echo "  （无）"
+            echo
+            echo ".config 总行数: $(wc -l < .config)"
+          } | tee /tmp/config-report.txt
+
+      - name: Upload .config and report
+        uses: actions/upload-artifact@v4
+        with:
+          name: nx30pro-112m-config
+          path: |
+            openwrt/.config
+            /tmp/config-report.txt
+          if-no-files-found: error

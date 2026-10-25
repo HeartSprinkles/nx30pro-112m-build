@@ -113,15 +113,16 @@ jobs:
       - name: Apply NX30 Pro 112M support
         run: bash scripts/apply-nx30pro-112m.sh openwrt
 
+      # 以源码自带的 defconfig/mt7981-ax3000.config 为基准，
+      # 保留其全部软件包/工具链/DEVEL 设置，只把设备列表裁到我们这一个。
       - name: Configure
         run: |
-          cp configs/nx30pro-112m.config openwrt/.config
+          bash scripts/configure.sh openwrt
           cd openwrt
-          make defconfig
 
           echo "--- 关键配置校验 ---"
           rc=0
-          # CONFIG_TARGET_PROFILE 是最终决定编哪个设备的东西，比设备符号更可靠
+          # CONFIG_TARGET_PROFILE 是最终决定编哪个设备的东西
           grep -qx 'CONFIG_TARGET_PROFILE="DEVICE_h3c_magic-nx30-pro-112m"' .config \
             || { echo "::error::TARGET_PROFILE 不是 h3c_magic-nx30-pro-112m（设备定义未生效？）"; rc=1; }
           grep -qx 'CONFIG_PACKAGE_luci-theme-glass=y' .config \
@@ -130,6 +131,9 @@ jobs:
             || { echo "::error::luci-app-nikki 未被选中"; rc=1; }
           grep -qE '^CONFIG_PACKAGE_mihomo(-meta)?=y' .config \
             || { echo "::error::mihomo 内核未被选中"; rc=1; }
+          # 设备列表必须只剩我们这一个
+          n=$(grep -c '^CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_.*=y' .config || true)
+          [ "$n" = "1" ] || { echo "::error::设备条目应为 1 个，实际 ${n} 个"; rc=1; }
           if [ "$rc" != "0" ]; then
             grep -E 'h3c|nikki|glass|mihomo' .config || true
             exit 1
