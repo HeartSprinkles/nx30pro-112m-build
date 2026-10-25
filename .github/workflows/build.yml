@@ -147,6 +147,9 @@ jobs:
           path: openwrt/build.log
           if-no-files-found: ignore
 
+      # .config / config.buildinfo 在 ImmortalWrt 里会被裁剪，不可靠；
+      # .manifest 才是最终进镜像的包清单。
+      # WiFi 走 MTK 闭源 mt_wifi（mtk-openwrt-feeds），不是开源 mt76。
       - name: Verify image contents
         run: |
           cd openwrt/bin/targets/mediatek/filogic
@@ -154,9 +157,7 @@ jobs:
           if [ -z "$MAN" ]; then echo "::warning::未找到 .manifest，跳过校验"; exit 0; fi
           echo "manifest: $MAN"
           rc=0
-          # .config / config.buildinfo 在 ImmortalWrt 里会被裁剪，不可靠；
-          # .manifest 才是最终进镜像的包清单。
-          for p in kmod-mt7915e kmod-mt7981-firmware mt7981-wo-firmware wpad-openssl \
+          for p in kmod-mt_wifi mtwifi-cfg-ucode luci-app-mtwifi-cfg \
                    luci-theme-glass luci-app-nikki nikki mihomo; do
             if grep -qE "^${p}[[:space:]-]" "$MAN"; then
               echo "✓ $p"
@@ -165,13 +166,18 @@ jobs:
               rc=1
             fi
           done
+          # 反向检查：mt76 与 mt_wifi 抢同一硬件，不能共存
+          if grep -qE '^kmod-mt7915e[[:space:]-]' "$MAN"; then
+            echo "::error::镜像里同时出现 kmod-mt7915e（开源 mt76），会与 mt_wifi 冲突"
+            rc=1
+          fi
           if [ "$rc" != "0" ]; then
             echo "--- 实际包含的相关包 ---"
-            grep -iE "mt79|wpad|glass|nikki|mihomo" "$MAN" || true
+            grep -iE "mt_wifi|mtwifi|mt79|wpad|glass|nikki|mihomo" "$MAN" || true
             exit 1
           fi
           echo "--- WiFi 相关包 ---"
-          grep -iE "mt7915|mt7981|wpad" "$MAN"
+          grep -iE "mt_wifi|mtwifi|wpad" "$MAN"
 
       - name: Collect firmware
         run: |

@@ -78,8 +78,8 @@ jobs:
             echo "选中设备数: $(grep -c '^CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_.*=y' .config || true)"
             grep -E '^CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_.*=y' .config
             echo
-            echo "WiFi 包（.config 中预期为空，由设备定义 DEVICE_PACKAGES 带入）:"
-            grep -E 'mt7915|mt7981-firmware|mt7981-wo|wpad' .config || echo "  （无）"
+            echo "WiFi（MTK 闭源 mt_wifi，模板已开）:"
+            grep -E '^CONFIG_PACKAGE_(kmod-mt_wifi|mtwifi-cfg|mtwifi-cfg-ucode|luci-app-mtwifi-cfg)=|^CONFIG_MTK_(CHIP_MT7981|MT_WIFI_DRIVER_VERSION)' .config || echo "  （无）"
             echo
             echo "主题 / 代理:"
             grep -E '^CONFIG_PACKAGE_(luci-theme-glass|luci-app-nikki|nikki|mihomo)' .config || echo "  （无）"

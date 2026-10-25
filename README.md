@@ -5,7 +5,9 @@
 | 项目 | 内容 |
 | --- | --- |
 | 源码 | [chasey-dev/immortalwrt-mt798x-rebase](https://github.com/chasey-dev/immortalwrt-mt798x-rebase) 分支 `25.12`（内核 6.12） |
-| 分区 | jerryhan77 的 **112M 大分区**布局（`ubi` 从 64M 扩到 112M） |
+| 配置 | 源码自带的 **`defconfig/mt7981-ax3000.config`** 为基准，只把设备列表裁到我们这一个 |
+| 分区 | **112M 大分区**布局（`ubi` 从 64M 扩到 112M，吃掉 `pdt_data`/`pdt_data_1`/`exp`/`plugin`） |
+| WiFi | MTK 闭源 **`mt_wifi`**（mtk-openwrt-feeds），不是开源 mt76 |
 | 主题 | [rchen14b/luci-theme-glass](https://github.com/rchen14b/luci-theme-glass)（毛玻璃风格，已设为默认主题） |
 | 代理 | [nikkinikki-org/OpenWrt-nikki](https://github.com/nikkinikki-org/OpenWrt-nikki)（mihomo 透明代理，含 `mihomo-meta` 内核） |
 | 刷写 | 通过 [Yuzhii0718/bl-mt798x-dhcpd](https://github.com/Yuzhii0718/bl-mt798x-dhcpd) 的 U-Boot Web UI 刷入 |
@@ -40,15 +42,26 @@
 ```
 .
 ├── .github/workflows/build.yml          # 编译流水线
-├── configs/nx30pro-112m.config          # 配置种子（make defconfig 会补全其余项）
+├── .github/workflows/config-check.yml   # 只生成 .config 做校验，不编译（约 2 分钟）
+├── configs/nx30pro-112m.config          # 增量配置（只写模板里没有的项）
 ├── device/h3c_magic-nx30-pro-112m.mk    # 设备定义，追加到 filogic.mk
 ├── dts/mt7981b-h3c-magic-nx30-pro-112m.dts   # 112M 分区设备树
 ├── files/etc/uci-defaults/99-nx30pro-112m    # 首启设置默认主题/中文
-└── scripts/apply-nx30pro-112m.sh        # 把上面这些注入源码树（含 MAC 降级补丁）
+├── scripts/apply-nx30pro-112m.sh        # 注入 DTS/设备定义/files，含 MAC 降级补丁
+└── scripts/configure.sh                 # 模板 → 裁设备 → 叠加增量 → defconfig → 硬校验
 ```
 
-流水线做的事：克隆源码 → 加 nikki feed + Glass 主题 → 拉取 feeds → 注入 DTS/设备定义 → `make defconfig` →
-校验设备与软件包真的被选中 → 下载依赖 → 编译 → 收集产物。
+流水线只做四件"必须做的事"，其余一概不动：
+
+1. **取模板**：`cp defconfig/mt7981-ax3000.config .config`
+2. **裁设备**：删掉模板里其它 91 个设备，只留 `h3c_magic-nx30-pro-112m`
+3. **注入 112M**：新 DTS、设备定义、`02_network` 的 MAC 降级、首启配置
+4. **加两个 feed 级依赖**：nikki feed + Glass 主题
+
+软件包 / 工具链 / `CONFIG_DEVEL` / 闭源 WiFi 开关全部沿用模板，不覆盖。
+
+> 想先验证配置、不花 2 小时编译，就跑 `Config Check (no build)` 这个工作流，
+> 它会在 2 分钟内生成 `.config` 并做硬校验（设备唯一性、主题、nikki、mt_wifi 等）。
 
 ---
 

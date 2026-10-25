@@ -7,5 +7,6 @@
 .watch_run.py
 __pycache__/
 backup/
+build-failed.log
 openwrt/
 release-out/
