@@ -28,6 +28,9 @@ define Device/h3c_magic-nx30-pro-112m
 	fit lzma $$(KDIR)/image-$$(firstword $$(DEVICE_DTS)).dtb with-initrd | pad-to 64k
   IMAGE/sysupgrade.itb := append-kernel | \
 	fit gzip $$(KDIR)/image-$$(firstword $$(DEVICE_DTS)).dtb external-static-with-rootfs | append-metadata
-  DEVICE_PACKAGES :=
+  # 上游 Device/h3c_magic-nx30-pro 的 DEVICE_PACKAGES 是空的，直接照抄会导致
+  # 固件里没有任何 WiFi 驱动/固件（LuCI 里看不到"无线"菜单）。
+  # 这里补上 MT7981 的标准三件套（同类设备 asus_rt-ax57m / cudy_m3000 等都是这么写的）。
+  DEVICE_PACKAGES := kmod-mt7915e kmod-mt7981-firmware mt7981-wo-firmware
 endef
 TARGET_DEVICES += h3c_magic-nx30-pro-112m

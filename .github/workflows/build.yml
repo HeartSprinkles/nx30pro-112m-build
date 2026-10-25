@@ -160,13 +160,39 @@ jobs:
           path: openwrt/build.log
           if-no-files-found: ignore
 
+      - name: Verify image contents
+        run: |
+          cd openwrt/bin/targets/mediatek/filogic
+          MAN="$(ls *.manifest 2>/dev/null | head -1 || true)"
+          if [ -z "$MAN" ]; then echo "::warning::未找到 .manifest，跳过校验"; exit 0; fi
+          echo "manifest: $MAN"
+          rc=0
+          # .config / config.buildinfo 在 ImmortalWrt 里会被裁剪，不可靠；
+          # .manifest 才是最终进镜像的包清单。
+          for p in kmod-mt7915e kmod-mt7981-firmware mt7981-wo-firmware wpad-openssl \
+                   luci-theme-glass luci-app-nikki nikki mihomo; do
+            if grep -qE "^${p}[[:space:]-]" "$MAN"; then
+              echo "✓ $p"
+            else
+              echo "::error::镜像里缺少 $p"
+              rc=1
+            fi
+          done
+          if [ "$rc" != "0" ]; then
+            echo "--- 实际包含的相关包 ---"
+            grep -iE "mt79|wpad|glass|nikki|mihomo" "$MAN" || true
+            exit 1
+          fi
+          echo "--- WiFi 相关包 ---"
+          grep -iE "mt7915|mt7981|wpad" "$MAN"
+
       - name: Collect firmware
         run: |
           mkdir -p artifacts
           ls -lh openwrt/bin/targets/mediatek/filogic/
           find openwrt/bin/targets/mediatek/filogic -maxdepth 1 -type f \
             \( -name '*sysupgrade.itb' -o -name '*recovery.itb' -o -name 'sha256sums' \
-               -o -name 'profiles.json' -o -name 'config.buildinfo' \) \
+               -o -name 'profiles.json' -o -name 'config.buildinfo' -o -name '*.manifest' \) \
             -exec cp -v {} artifacts/ \;
           ls -lh artifacts/
 
